@@ -90,6 +90,8 @@ arma::mat bspline(arma::vec x,
 modelParam::modelParam(arma::mat x_train_,
                        arma::vec y_,
                        arma::mat x_test_,
+                       arma::mat B_train_,
+                       arma::mat B_test_,
                        int n_tree_,
                        double alpha_,
                        double beta_,
@@ -106,6 +108,8 @@ modelParam::modelParam(arma::mat x_train_,
         x_train = x_train_;
         y = y_;
         x_test = x_test_;
+        B_train = B_train_;
+        B_test = B_test_;
         n_tree = n_tree_;
         alpha = alpha_;
         beta = beta_;
@@ -783,31 +787,37 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
 
         // When we generate empty nodes we don't want to accept them;
         if(train_index[0]==-1){
-        // if(n_leaf < 2){
+        // if(n_leaf < 94){
                 r_sum = 0;
                 r_sq_sum = 10000;
                 n_leaf = 0;
                 log_likelihood = -2000000; // Absurd value avoid this case
                 return;
         }
+
+
         // Creating the B spline
-        arma::vec leaf_x(n_leaf);
-        arma::vec leaf_x_test(n_leaf_test);
+        arma::mat leaf_x(n_leaf,data.B_train.n_cols,arma::fill::ones);
+        arma::mat leaf_x_test(n_leaf_test,data.B_train.n_cols,arma::fill::ones);
         arma::vec leaf_res(n_leaf);
         // cout << "Error 1.0 spline loglike " << n_leaf << endl;
 
         for(int i = 0; i < n_leaf;i++){
-                leaf_x(i) = data.x_train(train_index[i],0);
+                for(int j = 0 ; j < data.B_train.n_cols; j++){
+                        leaf_x(i,j) = data.B_train(train_index[i],j);
+                }
                 leaf_res(i) = curr_res(train_index[i]);
         }
 
-        for(int i =0 ; i < n_leaf_test;i++){
-                leaf_x_test(i) = data.x_test(test_index[i],0);
+        for(int i = 0 ; i < n_leaf_test;i++){
+                for(int j = 0 ; j < data.B_test.n_cols; j++){
+                        leaf_x_test(i,j) = data.B_test(test_index[i],j);
+                }
         }
 
         // Calculating B
-        B = bspline(leaf_x,leaf_x);
-        B_test = bspline(leaf_x_test,leaf_x);
+        B = leaf_x;
+        B_test = leaf_x_test;
         // cout << "Size of B test: it has rows: " << B_test.n_rows << " and columns: "  << B_test.n_cols << endl;
          arma::mat B_t = B.t();
 
@@ -815,14 +825,13 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         arma::mat btb = B_t*B;
         btr = B_t*leaf_res;
         rtr = dot(leaf_res,leaf_res);
-        // arma::mat precision_diag = arma::eye<arma::mat>(B.n_cols,B.n_cols)*(data.tau_b);
         arma::mat precision_diag = arma::eye<arma::mat>(B.n_cols,B.n_cols)*(data.tau_b/data.tau);
         precision_diag(0,0) = data.tau_b_intercept/data.tau;
 
         inv_btb_p = inv(btb+precision_diag);
 
         arma::mat aux_loglikelihood3 = (btr.t()*(inv_btb_p*btr));
-        log_likelihood = - 2*log(data.tau) -log(data.tau_b) + 0.5*log(det(inv_btb_p))- 0.5*data.tau*rtr+0.5*data.tau*aux_loglikelihood3(0,0);
+        log_likelihood = - 0.5*B.n_cols*log(data.tau) - 0.5*(B.n_cols-1)*log(data.tau_b) -  0.5*log(data.tau_b_intercept)+ 0.5*log(det(inv_btb_p))- 0.5*data.tau*rtr+0.5*data.tau*aux_loglikelihood3(0,0);
 
         return;
 
@@ -849,7 +858,7 @@ void updateBeta(Node* tree, modelParam &data){
         // Iterating over the terminal nodes and updating the beta values
         for(int i = 0; i < t_nodes.size();i++){
                 if(t_nodes[i]->n_leaf==0 ){
-                        /// Skip nodes that doesn't have any obsevation within terminal node
+                        /// Skip nodes that doesn't have any observation within terminal node
                         continue;
                 }
                 arma::vec mvn_mean = t_nodes[i]->inv_btb_p*t_nodes[i]->btr;
@@ -1008,6 +1017,8 @@ void updateTauBintercept(Forest all_trees,
 Rcpp::List sbart(arma::mat x_train,
           arma::vec y_train,
           arma::mat x_test,
+          arma::mat B_train,
+          arma::mat B_test,
           int n_tree,
           int n_mcmc,
           int n_burn,
@@ -1023,6 +1034,8 @@ Rcpp::List sbart(arma::mat x_train,
         modelParam data(x_train,
                         y_train,
                         x_test,
+                        B_train,
+                        B_test,
                         n_tree,
                         alpha,
                         beta,
@@ -1145,7 +1158,7 @@ Rcpp::List sbart(arma::mat x_train,
                         all_tree_post.slice(curr) = tree_fits_store;
                         tau_post(curr) = data.tau;
                         tau_b_post(curr) = data.tau_b;
-                        tau_b_post_intercept = data.tau_b_intercept;
+                        tau_b_post_intercept(curr) = data.tau_b_intercept;
                         curr++;
                 }
 
@@ -1224,60 +1237,3 @@ Rcpp::List sbart(arma::mat x_train,
 // }
 
 // Testing likelihood calculation
-
-// [[Rcpp::export]]
-double test_logtree(arma::mat X,
-                    arma::vec y){
-
-        modelParam data(X,
-                        y,
-                        X,
-                        10,
-                        0.95,
-                        2.0,
-                        1.0,
-                        1.0,
-                        1.0,
-                        1.0,
-                        1.0,
-                        1.0,
-                        2000,
-                        500);
-
-        // Creating a tree
-        Node node_init(data) ;
-        node_init.Stump(data);
-        // Forest forest(data);
-        node_init.nodeLogLike(data,data.y);
-        std::cout << "Root loglike " << node_init.log_likelihood << std::endl;
-
-        // Trying to grow a tree
-        grow(&node_init, data, y);
-        std::cout << " GROWN TREE - Root loglike: " << node_init.left->log_likelihood << std::endl;
-        cout << "Number of leaves: " << leaves(&node_init).size() << endl;
-        prune(&node_init, data,  y);
-        cout << "Number of leaves: " << leaves(&node_init).size() << endl;
-        // Trying to grow a tree
-        for(int  i=0;i<100;i++){
-                grow(&node_init, data, y);
-        }
-        std::cout << " GROWN TREE - Root loglike: " << node_init.left->left->log_likelihood << std::endl;
-        cout << "Number of leaves: " << leaves(&node_init).size() << endl;
-
-        // Trying to grow a tree
-        for(int  i=0;i<100;i++){
-                prune(&node_init, data, y);
-        }
-
-        // Trying to change a tree
-        for(int  j=0;j<100;j++){
-                change(&node_init, data, y);
-        }
-        std::cout << " CHANGE TREE - Root loglike: " << node_init.left->left->log_likelihood << std::endl;
-        cout << "Number of leaves: " << leaves(&node_init).size() << endl;
-
-        return 0.0;
-}
-
-
-

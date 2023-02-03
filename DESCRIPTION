@@ -1,4 +1,4 @@
-Package: sbart
+Package: sbart2
 Type: Package
 Title: What the Package Does (Title Case)
 Version: 0.1.0
@@ -15,4 +15,5 @@ LinkingTo:
     RcppArmadillo
 Imports: 
     Rcpp,
-    RcppArmadillo
+    RcppArmadillo,
+    splines

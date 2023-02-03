@@ -8,6 +8,7 @@ rbart <- function(x_train,
                  n_burn = 500,
                  alpha = 0.95,
                  beta = 2,
+                 df_splines = 10,
                  df = 3,
                  sigquant = 0.9,
                  kappa = 2,
@@ -41,12 +42,21 @@ rbart <- function(x_train,
              x_test_scale[,i] <- normalize_covariates_bart(y = x_test[,i],a = x_min[i], b = x_max[i])
      }
 
-     # x_train_scale <- x_train_original
-     # x_test_scale <- x_test_original
 
      # Scaling the y
      min_y <- min(y)
      max_y <- max(y)
+
+     # Creating the B spline
+     B_train <- as.matrix(splines::bs(x = x_train_scale,df = df_splines,intercept = TRUE))
+     # B_test <- as.matrix(splines::bs(x = x_test_scale,df = df_splines,Boundary.knots = range(x_train_scale),intercept = TRUE))
+     B_test <- as.matrix(predict(B_train,newx = x_test_scale))
+
+     # Transforming back to matrix
+     # x_train_scale <- as.matrix(B_train)
+     # x_test_scale <- as.matrix(B_test)
+
+     # Scaling "y"
      if(scale_bool){
         y_scale <- normalize_bart(y = y,a = min_y,b = max_y)
      } else {
@@ -55,21 +65,22 @@ rbart <- function(x_train,
 
      # Calculating \tau_{mu}
      tau_b <- tau_mu <- (4*n_tree*(kappa^2))
-     tau_b <- n_tree
+     # tau_b <- n_tree
 
      # Getting the naive sigma value
-     nsigma <- naive_sigma(x = x_train_scale,y = y_scale)
+     nsigma <- naive_sigma(x = x_train_scale[,,drop = FALSE],y = y_scale)
 
      # Calculating tau hyperparam
      a_tau <- df/2
+
      # Calculating lambda
      qchi <- stats::qchisq(p = 1-sigquant,df = df,lower.tail = 1,ncp = 0)
      lambda <- (nsigma*nsigma*qchi)/df
      d_tau <- (lambda*df)/2
 
      # Defining a_tau_b and d_tau_b
-     a_tau_b <- n_tree*10
-     d_tau_b <- 10
+     a_tau_b <- n_tree
+     d_tau_b <- 1
 
      # Call the bart function
      tau_init <- nsigma^(-2)
@@ -82,6 +93,8 @@ rbart <- function(x_train,
      bart_obj <- sbart(x_train_scale,
           y_scale,
           x_test_scale,
+          B_train = B_train,
+          B_test = B_test,
           n_tree,
           n_mcmc,
           n_burn,

@@ -9,7 +9,8 @@ struct modelParam {
         arma::mat x_train;
         arma::vec y;
         arma::mat x_test;
-
+        arma::mat B_train;
+        arma::mat B_test;
 
         // BART prior param specification
         int n_tree;
@@ -30,6 +31,8 @@ struct modelParam {
         modelParam(arma::mat x_train_,
                    arma::vec y_,
                    arma::mat x_test_,
+                   arma::mat B_train_,
+                   arma::mat B_test_,
                    int n_tree_,
                    double alpha_,
                    double beta_,
