@@ -1,45 +1,57 @@
 # Getting the BART wrapped function
 #' @export
 rbart <- function(x_train,
-                 y,
-                 x_test,
-                 n_tree = 200,
-                 n_mcmc = 2000,
-                 n_burn = 500,
-                 alpha = 0.95,
-                 beta = 2,
-                 df_splines = 10,
-                 df = 3,
-                 sigquant = 0.9,
-                 kappa = 2,
-                 scale_bool = TRUE) {
+                  y,
+                  x_test,
+                  n_tree = 200,
+                  n_mcmc = 2000,
+                  n_burn = 500,
+                  alpha = 0.95,
+                  beta = 2,
+                  df_splines = 10,
+                  df = 3,
+                  sigquant = 0.9,
+                  kappa = 2,
+                  scale_bool = TRUE,
+                  # Hyperparam for tau_b and tau_b_0
+                  df_tau_b = 5,
+                  prob_tau_b = 0.9) {
 
      # Verifying if x_train and x_test are matrices
-     if(!is.matrix(x_train) || !is.matrix(x_test)){
-          x_train <- as.matrix(x_train)
-          x_test <- as.matrix(x_test)
+     if(!is.data.frame(x_train) || !is.data.frame(x_test)){
+          stop("Insert valid data.frame for both data and xnew.")
      }
 
-     if(is.null(colnames(x_train)) || is.null(colnames(x_test))) {
-          stop("Insert valid NAMED matrix for x_train or x_test")
-     }
+     # Creating the col
+     original_p <- 1:ncol(x_train)-1
+
+
+     # Getting the valid
+     dummy_x <- caret::dummyVars(~.,data = x_train)
+
+     col_names <- attr(dummy_x$terms,"term.labels")
+     dummy_x_train_m <- predict(object = dummy_x,newdata = x_train)
+     dummy_x_test_m <- predict(object = dummy_x,newdata = x_test)
+
+     recode_names <- recode_vars(x_train = x_train,dummy_obj = dummy_x)
+     n_levels <- c(table(recode_names)-1) # It also counts the zero
+
+     x_train_scale <- dummy_x_train_m
+     x_test_scale <- dummy_x_test_m
 
      # Scaling x
-     x_min <- apply(x_train,2,min)
-     x_max <- apply(x_train,2,max)
+     x_min <- apply(as.matrix(x_train_scale),2,min)
+     x_max <- apply(as.matrix(x_train_scale),2,max)
 
      # Storing the original
      x_train_original <- x_train
      x_test_original <- x_test
 
-     # Creating the scaled vesion
-     x_train_scale <- x_train
-     x_test_scale <- x_test
 
      # Normalising all the columns
      for(i in 1:ncol(x_train)){
-             x_train_scale[,i] <- normalize_covariates_bart(y = x_train[,i],a = x_min[i], b = x_max[i])
-             x_test_scale[,i] <- normalize_covariates_bart(y = x_test[,i],a = x_min[i], b = x_max[i])
+             x_train_scale[,i] <- normalize_covariates_bart(y = x_train_scale[,i],a = x_min[i], b = x_max[i])
+             x_test_scale[,i] <- normalize_covariates_bart(y = x_test_scale[,i],a = x_min[i], b = x_max[i])
      }
 
 
@@ -48,9 +60,8 @@ rbart <- function(x_train,
      max_y <- max(y)
 
      # Creating the B spline
-     B_train <- as.matrix(splines::bs(x = x_train_scale,df = df_splines,intercept = TRUE))
-     # B_test <- as.matrix(splines::bs(x = x_test_scale,df = df_splines,Boundary.knots = range(x_train_scale),intercept = TRUE))
-     B_test <- as.matrix(predict(B_train,newx = x_test_scale))
+     B_train <- as.matrix(splines::bs(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],df = df_splines,intercept = TRUE))
+     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE]))
 
      # Transforming back to matrix
      # x_train_scale <- as.matrix(B_train)
@@ -63,12 +74,14 @@ rbart <- function(x_train,
         y_scale <- y
      }
 
+
+
      # Calculating \tau_{mu}
-     tau_b <- tau_mu <- (4*n_tree*(kappa^2))
+     tau_b_0 <- tau_b <- tau_mu <- 0.1*(4*n_tree*(kappa^2))
      # tau_b <- n_tree
 
      # Getting the naive sigma value
-     nsigma <- naive_sigma(x = x_train_scale[,,drop = FALSE],y = y_scale)
+     nsigma <- naive_sigma(x = x_train_scale,y = y_scale)
 
      # Calculating tau hyperparam
      a_tau <- df/2
@@ -89,6 +102,10 @@ rbart <- function(x_train,
      # Creating the vector that stores all trees
      all_tree_post <- vector("list",length = round(n_mcmc-n_burn))
 
+     rate_d_tau <- optim(par = 1,d_tau_b_rate,method = "L-BFGS-B",lower = 0,
+                         df = df_tau_b, prob = prob_tau_b,kappa = kappa,
+                         n_tree = n_tree)
+
      # Generating the BART obj
      bart_obj <- sbart(x_train_scale,
           y_scale,
@@ -102,11 +119,14 @@ rbart <- function(x_train,
           mu_init,
           tau_mu,
           tau_b,
-          tau_b, # Same initial value as tau_b
+          tau_b_0, # Same initial value as tau_b
           alpha,
           beta,
           a_tau,d_tau,
-          a_tau_b,d_tau_b)
+          a_tau_b = df_tau_b*0.5,d_tau_b = rate_d_tau$par, # Hypeparameters from tau_b and tau_b_0
+          original_p, # Getting the p available variables
+          n_levels # Getting the sample levels
+          )
 
 
      if(scale_bool){

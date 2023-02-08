@@ -102,7 +102,9 @@ modelParam::modelParam(arma::mat x_train_,
                        double a_tau_,
                        double d_tau_,
                        double n_mcmc_,
-                       double n_burn_){
+                       double n_burn_,
+                       arma::vec p_sample_,
+                       arma::vec p_sample_levels_){
 
         // Assign the variables
         x_train = x_train_;
@@ -121,6 +123,8 @@ modelParam::modelParam(arma::mat x_train_,
         d_tau = d_tau_;
         n_mcmc = n_mcmc_;
         n_burn = n_burn_;
+        p_sample = p_sample_;
+        p_sample_levels = p_sample_levels_;
 
 }
 
@@ -241,11 +245,17 @@ bool Node::isRight(){
 }
 
 // Sample var
-void Node::sampleSplitVar(int p){
+void Node::sampleSplitVar(modelParam &data){
 
-        // Sampling one index from 0:(p-1)
-        var_split = std::rand()%p;
-        var_split = 0;
+          // Sampling one index from 0:(p-1)
+          int original_index = std::rand()%data.p_sample.size();
+          int new_sample;
+          if(data.p_sample_levels[original_index]==0){
+               var_split = data.p_sample[original_index];
+          } else {
+               new_sample = std::rand()%(int)data.p_sample_levels[original_index];
+               var_split = data.p_sample[original_index] + data.p_sample_levels[original_index];
+          }
 
 }
 // This functions will get and update the current limits for this current variable
@@ -410,7 +420,7 @@ void grow(Node* tree, modelParam &data, arma::vec &curr_res){
         g_node->addingLeaves(data);
 
         // Selecting the var
-        g_node-> sampleSplitVar(data.x_train.n_cols);
+        g_node-> sampleSplitVar(data);
         // Updating the limits
         g_node->getLimits();
 
@@ -639,7 +649,7 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
         int old_upper = c_node->upper;
 
         // Selecting the var
-        c_node-> sampleSplitVar(data.x_train.n_cols);
+        c_node-> sampleSplitVar(data);
         // Updating the limits
         c_node->getLimits();
         // Selecting a rule
@@ -787,7 +797,7 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
 
         // When we generate empty nodes we don't want to accept them;
         if(train_index[0]==-1){
-        // if(n_leaf < 94){
+        // if(n_leaf < 15){
                 r_sum = 0;
                 r_sq_sum = 10000;
                 n_leaf = 0;
@@ -1026,7 +1036,8 @@ Rcpp::List sbart(arma::mat x_train,
           double tau_mu, double tau_b, double tau_b_intercept,
           double alpha, double beta,
           double a_tau, double d_tau,
-          double a_tau_b, double d_tau_b){
+          double a_tau_b, double d_tau_b,
+          arma::vec p_sample, arma::vec p_sample_levels){
 
         // Posterior counter
         int curr = 0;
@@ -1046,7 +1057,9 @@ Rcpp::List sbart(arma::mat x_train,
                         a_tau,
                         d_tau,
                         n_mcmc,
-                        n_burn);
+                        n_burn,
+                        p_sample,
+                        p_sample_levels);
 
         // Getting the n_post
         int n_post = n_mcmc - n_burn;
@@ -1148,10 +1161,10 @@ Rcpp::List sbart(arma::mat x_train,
 
 
                 // Get the tau
-                updateTauB(all_forest,data,a_tau_b,d_tau_b);
-                updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
+                // updateTauB(all_forest,data,a_tau_b,d_tau_b);
+                // updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
 
-                if(i > n_burn){
+                if(i >= n_burn){
                         // Storing the predictions
                         y_train_hat_post.col(curr) = prediction_train_sum;
                         y_test_hat_post.col(curr) = prediction_test_sum;

@@ -2,36 +2,54 @@ rm(list=ls())
 library(tidyverse)
 
 Rcpp::sourceCpp("src/sbart.cpp")
-source("R/wrap_bart.R")
 source("R/other_functions.R")
+source("R/wrap_bart.R")
 n_ <- 100
 x <- matrix(seq(-pi,pi,length.out = n_))
 x_new <- matrix(seq(-pi,pi,length.out = n_*100))
+colnames(x) <- "x"
+colnames(x_new) <- "x"
+# x <- as.data.frame(x)
+# x_test <- as.data.frame(x_new)
 y <- sin(x) + rnorm(n = n_,sd = 0.1)
 y[x<0] <- y[x<0] + 2
 y[x>0] <- y[x>0] - 2
+# add_class <- rnorm(n = n_)
+# add_class <- factor(ifelse(add_class>0,"A","B"))
 
-colnames(x) <- "x"
-colnames(x_new) <- "x"
+# x <- x_new <- cbind(x,add_class)
+# y[x$add_class=="A",1] <- y[x$add_class=="A",1] + 2
+# y[x$add_class=="B",1] <- y[x$add_class=="B",1] - 2
+
 # x <- cbind(1,x)
 # colnames(x) <- c("x.0","x.1")
 # x_new <- cbind(1,x_new)
 # colnames(x_new) <- c("x.0","x.1")
 
 # Testing over the motorbike data
-library(boot)
-data("motor")
-x <- motor$times %>% as.matrix
-y <- motor$accel %>% as.matrix()
-x_new <- seq(min(x),max(x),length.out = 1000) %>% as.matrix()
-colnames(x) <- "x"
-colnames(x_new) <- "x"
+# library(boot)
+# data("motor")
+# x <- motor$times %>% as.matrix
+# y <- motor$accel %>% as.matrix()
+# x_new <- seq(min(x),max(x),length.out = 1000) %>% as.matrix()
+# colnames(x) <- "x"
+# colnames(x_new) <- "x"
 # x_new <- x
 
+
+# Iris test
+# x <- dplyr::select(iris,Sepal.Length,Species)
+# x_test <- x
+# y <- iris$Sepal.Width
+
+x <- as.data.frame(x)
+x_test <- as.data.frame(x_new)
+
+
 # Testing the GP-BART
-bart_test <- rbart(x_train = x,y = y,x_test = x_new,n_tree = 5,n_mcmc = 5000,
-                   alpha = 0.95,beta = 2,df_splines = 5,
-                   n_burn = 2500,scale_bool = TRUE)
+bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x_test,n_tree = 10,n_mcmc = 3000,
+                   alpha = 0.95,beta = 2,df_splines = 10,df_tau_b = 5,prob_tau_b = 0.9,
+                   n_burn = 1500,scale_bool = TRUE)
 
 # Convergence plots
 par(mfrow = c(3,1))
@@ -39,8 +57,14 @@ plot(bart_test$tau_post[-2500],type = "l", main = expression(tau),ylab=  "")
 plot(bart_test$tau_b_post[-2500],type = "l", main = expression(tau[b]),ylab=  "")
 plot(bart_test$tau_b_post_intercept[-2500],type = "l", main = expression(tau[b[0]]),ylab=  "")
 
+bartmod <- dbarts::bart(x.train = x,y.train = unlist(c(y)),ntree = 20,x.test = x_test)
 
-bartmod <- dbarts::bart(x.train = x,y.train = y,ntree = 20,x.test = x_new)
+# par(mfrow=c(2,1))
+# plot(y$x,bart_test$y_hat %>% rowMeans())
+# plot(y$x,bartmod$yhat.train.mean)
+
+plot(x$x,bart_test$y_hat %>% rowMeans(), col = "blue")
+plot(x$x,bartmod$yhat.train.mean, col = "red")
 
 # All ll trees prediction plot
 all_tree_posterior_mean <- Reduce("+",bart_test$all_tree_post)/length(bart_test$all_tree_post)
@@ -93,3 +117,4 @@ ggplot()+
 # ggplot(plot_basis)+
 #         geom_line(mapping = aes(x = x, y = value, col = name))+
 #         theme_bw()
+

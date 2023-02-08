@@ -22,6 +22,8 @@ struct modelParam {
         double tau;
         double a_tau;
         double d_tau;
+        arma::vec p_sample;
+        arma::vec p_sample_levels;
 
         // MCMC spec.
         int n_mcmc;
@@ -43,7 +45,9 @@ struct modelParam {
                    double a_tau_,
                    double d_tau_,
                    double n_mcmc_,
-                   double n_burn_);
+                   double n_burn_,
+                   arma::vec p_sample_,
+                   arma::vec p_sample_levels_);
 
 };
 
@@ -106,7 +110,7 @@ struct Node {
      void Stump(modelParam& data);
      void updateWeight(const arma::mat X, int i);
      void getLimits(); // This function will get previous limit for the current var
-     void sampleSplitVar(int p);
+     void sampleSplitVar(modelParam& data);
      bool isLeft();
      bool isRight();
      void grow(Node* tree, modelParam &data, arma::vec &curr_res);

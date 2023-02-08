@@ -74,4 +74,95 @@ bbase <- function(x, xl = min(x), xr = max(x), nseg = 30, deg = 3) {
 }
 
 
+# Function to create a vector of variables that being categorical will
+#have the same code
+recode_vars <- function(x_train, dummy_obj){
+
+        vars <- numeric()
+        j <- 0
+        i <- 0
+        c <- 1
+        while(!is.na(colnames(x_train)[c])){
+                if(colnames(x_train)[c] %in% dummy_obj$facVars){
+                        curr_levels <- dummy_obj$lvls[[colnames(x_train)[c]]]
+                        for(k in 1:length(curr_levels)){
+                             i = i+1
+                             vars[i] <- j
+                        }
+                } else {
+
+                     i = i+1
+                     vars[i] <- j
+                }
+                j = j+1
+                c = c+1
+        }
+
+        return(vars)
+}
+
+# Calculating the rmse
+rmse <- function(x,y){
+     return(sqrt(mean((y-x)^2)))
+}
+
+# Calculating CRPS from (https://arxiv.org/pdf/1709.04743.pdf)
+crps <- function(y,means,sds){
+
+     # scaling the observed y
+     z <- (y-means)/sds
+
+     crps_vector <- sds*(z*(2*stats::pnorm(q = z,mean = 0,sd = 1)-1) + 2*stats::dnorm(x = z,mean = 0,sd = 1) - 1/(sqrt(pi)) )
+
+     return(list(CRPS = mean(crps_vector), crps = crps_vector))
+}
+
+
+pi_coverage <- function(y, y_hat_post, sd_post,only_post = FALSE, prob = 0.5,n_mcmc_replications = 1000){
+
+     # Getting the number of posterior samples and columns, respect.
+     np <- nrow(y_hat_post)
+     nobs <- ncol(y_hat_post)
+
+     full_post_draw <- list()
+
+     # Setting the progress bar
+     progress_bar <- utils::txtProgressBar(
+          min = 1, max = n_mcmc_replications,
+          style = 3, width = 50 )
+
+     # Only post matrix
+     if(only_post){
+          post_draw <- y_hat_post
+     } else {
+          for(i in 1:n_mcmc_replications){
+               utils::setTxtProgressBar(progress_bar, i)
+
+               full_post_draw[[i]] <-(y_hat_post + replicate(sd_post,n = nobs)*matrix(stats::rnorm(n = np*nobs),
+                                                                                      nrow = np))
+          }
+     }
+
+     if(!only_post){
+          post_draw<- do.call(rbind,full_post_draw)
+     }
+
+     # CI boundaries
+     low_ci <- apply(post_draw,2,function(x){stats::quantile(x,probs = prob/2)})
+     up_ci <- apply(post_draw,2,function(x){stats::quantile(x,probs = 1-prob/2)})
+
+     pi_cov <- sum((y<=up_ci) & (y>=low_ci))/length(y)
+
+     return(pi_cov)
+}
+
+# Get a prior distribution for \tau_b
+d_tau_b_rate <- function(df,
+                    prob,
+                    kappa,
+                    n_tree,
+                    d_tau){
+     (pgamma(q = 0.1*(4*(kappa^2)*n_tree),shape = df/2,rate = d_tau,lower.tail = FALSE)-prob)^2
+}
+
 
