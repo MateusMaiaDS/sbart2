@@ -11,7 +11,7 @@ colnames(x) <- "x"
 colnames(x_new) <- "x"
 # x <- as.data.frame(x)
 # x_test <- as.data.frame(x_new)
-y <- sin(x) + rnorm(n = n_,sd = 0.1)
+y <- sin(2*x) + rnorm(n = n_,sd = 0.1)
 y[x<0] <- y[x<0] + 2
 y[x>0] <- y[x>0] - 2
 # add_class <- rnorm(n = n_)
@@ -47,9 +47,11 @@ x_test <- as.data.frame(x_new)
 
 
 # Testing the GP-BART
-bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x_test,n_tree = 10,n_mcmc = 3000,
-                   alpha = 0.95,beta = 2,df_splines = 10,df_tau_b = 5,prob_tau_b = 0.9,
-                   n_burn = 1500,scale_bool = TRUE)
+bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x,
+                   n_tree = 10,n_mcmc = 2000,
+                   alpha = 0.95,beta = 2,nIknots = 10,
+                   df_tau_b = 10,prob_tau_b = 0.9,
+                   n_burn = 500,scale_bool = TRUE)
 
 # Convergence plots
 par(mfrow = c(3,1))
@@ -58,6 +60,10 @@ plot(bart_test$tau_b_post[-2500],type = "l", main = expression(tau[b]),ylab=  ""
 plot(bart_test$tau_b_post_intercept[-2500],type = "l", main = expression(tau[b[0]]),ylab=  "")
 
 bartmod <- dbarts::bart(x.train = x,y.train = unlist(c(y)),ntree = 20,x.test = x_test)
+
+
+# motrbartmod <- MOTRbart::motr_bart(x = cbind(1,x),y = c(y))
+# pred_motrbart = predict_motr_bart(motrbartmod,cbind(1,x_test),type = "all")
 
 # par(mfrow=c(2,1))
 # plot(y$x,bart_test$y_hat %>% rowMeans())
@@ -88,6 +94,8 @@ ggplot()+
      geom_point(data = data.frame(x = x, y = apply(bart_test[[1]],1,mean)), mapping = aes(x = x,  y = y), col = "darkblue", alpha = 0.7, pch= 3)+
      geom_line(data = data.frame(x = x_new, y = apply(bart_test[[2]],1,mean)), mapping = aes(x = x, y = y) , col = "blue") +
      geom_line(data = data.frame(x = x_new, y = bartmod$yhat.test.mean), mapping = aes(x = x, y = y), col ="red")+
+     # geom_line(data = data.frame(x = x_new, y = pred_motrbart %>% colMeans()), mapping = aes(x = x, y = y), col ="darkgreen")+
+
      geom_line(data = all_tree_posterior_mean,
                mapping = aes(x = x, y = value, col = name), alpha = 0.5,show.legend = FALSE)+
      ylim(y = range(y)*2)+
@@ -118,3 +126,4 @@ ggplot()+
 #         geom_line(mapping = aes(x = x, y = value, col = name))+
 #         theme_bw()
 
+par(mfrow=c(1,1))

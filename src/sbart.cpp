@@ -178,6 +178,7 @@ void Node::Stump(modelParam& data){
         left = this;
         right = this;
         parent = this;
+        // n_leaf  = data.x_train.n_rows;
 
         // Updating the training index with the current observations
         for(int i=0; i<data.x_train.n_rows;i++){
@@ -478,7 +479,19 @@ void grow(Node* tree, modelParam &data, arma::vec &curr_res){
                 g_node->right->n_leaf_test = test_right_counter;
         }
 
-        // cout << "test Right counter" << g_node->right->n_leaf_test  <<  endl;
+        // Avoiding nodes lower than the node_min
+        if((g_node->left->n_leaf<5) || (g_node->right->n_leaf<5)){
+
+                // cout << " NODES" << endl;
+                // Returning to the old values
+                g_node->var_split = old_var_split;
+                g_node->var_split_rule = old_var_split_rule;
+                g_node->lower = old_lower;
+                g_node->upper = old_upper;
+                g_node->deletingLeaves();
+                return;
+        }
+
 
         // Updating the loglikelihood for those terminal nodes
         g_node->left->splineNodeLogLike(data, curr_res);
@@ -525,7 +538,9 @@ void prune(Node* tree, modelParam&data, arma::vec &curr_res){
         std::vector<Node*> t_nodes = leaves(tree);
 
         // Can't prune a root
-        if(t_nodes.size()<2){
+        if(t_nodes.size()==1){
+                // cout << "Nodes size " << t_nodes.size() <<endl;
+                t_nodes[0]->splineNodeLogLike(data, curr_res);
                 return;
         }
 
@@ -544,8 +559,10 @@ void prune(Node* tree, modelParam&data, arma::vec &curr_res){
                 tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
         }
 
+        // cout << "Error C1" << endl;
         // Updating the loglikelihood of the selected pruned node
         p_node->splineNodeLogLike(data, curr_res);
+        // cout << "Error C2" << endl;
 
         // Getting the loglikelihood of the new tree
         double new_tree_log_like = tree_log_like + p_node->log_likelihood - (p_node->left->log_likelihood + p_node->right->log_likelihood);
@@ -566,6 +583,9 @@ void prune(Node* tree, modelParam&data, arma::vec &curr_res){
 
         if(rand_unif()<acceptance){
                 p_node->deletingLeaves();
+        } else {
+                // p_node->left->splineNodeLogLike(data, curr_res);
+                // p_node->right->splineNodeLogLike(data, curr_res);
         }
 
         return;
@@ -576,11 +596,6 @@ void prune(Node* tree, modelParam&data, arma::vec &curr_res){
 void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
 
-        // Setting the size of the tree
-        if(tree->isRoot) {
-                return;
-        }
-
         // Getting the number of terminal nodes
         std::vector<Node*> t_nodes = leaves(tree) ;
         std::vector<Node*> nog_nodes = nogs(tree);
@@ -590,6 +605,12 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
         // Calculate current tree log likelihood
         double tree_log_like = 0;
+
+        if(c_node->isRoot){
+                // cout << " THAT NEVER HAPPENS" << endl;
+               c_node-> n_leaf = data.x_train.n_rows;
+               c_node-> n_leaf_test = data.x_test.n_rows;
+        }
 
         // Calculating the whole likelihood fo the tree
         for(int i = 0; i < t_nodes.size(); i++){
@@ -605,10 +626,12 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
         // Storing all the old loglikelihood from left
         double old_left_log_like = c_node->left->log_likelihood;
-        double old_left_r_sum = c_node->left->r_sum;
-        double old_left_r_sq_sum = c_node->left->r_sq_sum;
-        double old_left_n_leaf = c_node->left->n_leaf;
+        arma::mat old_left_b = c_node->left->B;
+        arma::mat old_left_b_test = c_node->left->B_test;
+        double old_left_rtr = c_node->left->rtr;
+        arma::mat old_left_inv_btb_p = c_node->left->inv_btb_p;
         int old_left_train_index[data.x_train.n_rows];
+        int old_left_n_leaf = c_node->left->n_leaf;
 
         for(int i = 0; i < data.x_train.n_rows;i++){
                 old_left_train_index[i] = c_node->left->train_index[i];
@@ -617,13 +640,15 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
         // Storing all of the old loglikelihood from right;
         double old_right_log_like = c_node->right->log_likelihood;
-        double old_right_r_sum = c_node->right->r_sum;
-        double old_right_r_sq_sum = c_node->right->r_sq_sum;
-        double old_right_n_leaf = c_node->right->n_leaf;
+        arma::mat old_right_b = c_node->right->B;
+        arma::mat old_right_b_test = c_node->right->B_test;
+        double old_right_rtr = c_node->right->rtr;
+        arma::mat old_right_inv_btb_p = c_node->right->inv_btb_p;
         int old_right_train_index[data.x_train.n_rows];
+        int old_right_n_leaf = c_node->right->n_leaf;
 
-        for(int i = 0; i< data.x_train.n_rows;i++){
-                old_right_train_index[i] = c_node->right->test_index[i];
+        for(int i = 0; i < data.x_train.n_rows;i++){
+                old_right_train_index[i] = c_node->right->train_index[i];
                 c_node->right->train_index[i] = -1;
         }
 
@@ -631,6 +656,8 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
         // Storing test observations
         int old_left_test_index[data.x_test.n_rows];
         int old_right_test_index[data.x_test.n_rows];
+        int old_left_n_leaf_test = c_node->left->n_leaf_test;
+        int old_right_n_leaf_test = c_node->right->n_leaf_test;
 
         for(int i = 0; i< data.x_test.n_rows;i++){
                 old_left_test_index[i] = c_node->left->test_index[i];
@@ -686,12 +713,14 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
 
         // Updating the left and the right nodes
-        for(int i = 0;i<data.x_train.n_rows;i++){
+        for(int i = 0;i<data.x_test.n_rows;i++){
+
                 if(c_node -> test_index[i] == -1){
                         c_node->left->n_leaf_test = test_left_counter;
                         c_node->right->n_leaf_test = test_right_counter;
                         break;
                 }
+
                 if(data.x_test(c_node->test_index[i],c_node->var_split)<c_node->var_split_rule){
                         c_node->left->test_index[test_left_counter] = c_node->test_index[i];
                         test_left_counter++;
@@ -705,14 +734,49 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
         if(c_node->isRoot){
                 c_node->left->n_leaf = train_left_counter;
                 c_node->right->n_leaf = train_right_counter;
-                c_node->left->n_leaf_test = train_left_counter;
-                c_node->right->n_leaf_test = test_left_counter;
+                c_node->left->n_leaf_test = test_left_counter;
+                c_node->right->n_leaf_test = test_right_counter;
+        }
+
+
+        if((c_node->left->n_leaf<5) || (c_node->right->n_leaf)<5){
+
+                // Returning to the previous values
+                c_node->var_split = old_var_split;
+                c_node->var_split_rule = old_var_split_rule;
+                c_node->lower = old_lower;
+                c_node->upper = old_upper;
+
+                // Returning to the old ones
+                c_node->left->B = old_left_b;
+                c_node->left->B_test = old_left_b_test;
+                c_node->left->rtr = old_left_rtr;
+                c_node->left->inv_btb_p = old_left_inv_btb_p;
+
+                c_node->left->n_leaf = old_left_n_leaf;
+                c_node->left->n_leaf_test = old_left_n_leaf_test;
+                c_node->left->log_likelihood = old_left_log_like;
+                c_node->left->train_index = old_left_train_index;
+                c_node->left->test_index = old_left_test_index;
+
+                // Returning to the old ones
+                c_node->right->B = old_right_b;
+                c_node->right->B_test = old_right_b_test;
+                c_node->right->rtr = old_right_rtr;
+                c_node->right->inv_btb_p = old_right_inv_btb_p;
+
+                c_node->right->n_leaf = old_right_n_leaf;
+                c_node->right->n_leaf_test = old_right_n_leaf_test;
+                c_node->right->log_likelihood = old_right_log_like;
+                c_node->right->train_index = old_right_train_index;
+                c_node->right->test_index = old_right_test_index;
+
+                return;
         }
 
         // Updating the new left and right loglikelihoods
         c_node->left->splineNodeLogLike(data,curr_res);
         c_node->right->splineNodeLogLike(data,curr_res);
-
 
         // Calculating the acceptance
         double new_tree_log_like =  - old_left_log_like - old_right_log_like + c_node->left->log_likelihood + c_node->right->log_likelihood;
@@ -730,16 +794,25 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
                 c_node->upper = old_upper;
 
                 // Returning to the old ones
-                c_node->left->r_sum = old_left_r_sum;
-                c_node->left->r_sq_sum = old_left_r_sq_sum;
+                c_node->left->B = old_left_b;
+                c_node->left->B_test = old_left_b_test;
+                c_node->left->rtr = old_left_rtr;
+                c_node->left->inv_btb_p = old_left_inv_btb_p;
+
                 c_node->left->n_leaf = old_left_n_leaf;
+                c_node->left->n_leaf_test = old_left_n_leaf_test;
                 c_node->left->log_likelihood = old_left_log_like;
                 c_node->left->train_index = old_left_train_index;
                 c_node->left->test_index = old_left_test_index;
 
-                c_node->right->r_sum = old_right_r_sum;
-                c_node->right->r_sq_sum = old_right_r_sq_sum;
+                // Returning to the old ones
+                c_node->right->B = old_right_b;
+                c_node->right->B_test = old_right_b_test;
+                c_node->right->rtr = old_right_rtr;
+                c_node->right->inv_btb_p = old_right_inv_btb_p;
+
                 c_node->right->n_leaf = old_right_n_leaf;
+                c_node->right->n_leaf_test = old_right_n_leaf_test;
                 c_node->right->log_likelihood = old_right_log_like;
                 c_node->right->train_index = old_right_train_index;
                 c_node->right->test_index = old_right_test_index;
@@ -748,6 +821,195 @@ void change(Node* tree, modelParam &data, arma::vec &curr_res){
 
         return;
 }
+
+// // Creating the change verb
+// void OLD_change(Node* tree, modelParam &data, arma::vec &curr_res){
+//
+//
+//         // Setting the size of the tree
+//         // if(tree->isRoot) {
+//         //         return;
+//         // }
+//
+//         // Getting the number of terminal nodes
+//         std::vector<Node*> t_nodes = leaves(tree) ;
+//         std::vector<Node*> nog_nodes = nogs(tree);
+//
+//         // Selecting one node to be sampled
+//         Node* c_node = sample_node(nog_nodes);
+//
+//         // Calculate current tree log likelihood
+//         double tree_log_like = 0;
+//
+//         // Calculating the whole likelihood fo the tree
+//         for(int i = 0; i < t_nodes.size(); i++){
+//                 // cout << "Loglike error " << ed
+//                 t_nodes[i]->splineNodeLogLike(data, curr_res);
+//                 tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
+//         }
+//
+//         cout << "Error C1" << endl;
+//
+//         // If the current node has size zero there is no point of change its rule
+//         if(c_node->n_leaf==0) {
+//                 cout << "Error C2" << endl;
+//                 return;
+//         }
+//
+//
+//
+//         // Storing all the old loglikelihood from left
+//         double old_left_log_like = c_node->left->log_likelihood;
+//         double old_left_r_sum = c_node->left->r_sum;
+//         double old_left_r_sq_sum = c_node->left->r_sq_sum;
+//         double old_left_n_leaf = c_node->left->n_leaf;
+//         int old_left_train_index[data.x_train.n_rows];
+//
+//         // cout <<" Old left train" << endl;
+//
+//         for(int i = 0; i < data.x_train.n_rows;i++){
+//                 old_left_train_index[i] = c_node->left->train_index[i];
+//                 c_node->left->train_index[i] = -1;
+//                 // cout << c_node->left->train_index[i] << endl;
+//         }
+//
+//         // Storing all of the old loglikelihood from right;
+//         double old_right_log_like = c_node->right->log_likelihood;
+//         double old_right_r_sum = c_node->right->r_sum;
+//         double old_right_r_sq_sum = c_node->right->r_sq_sum;
+//         double old_right_n_leaf = c_node->right->n_leaf;
+//         int old_right_train_index[data.x_train.n_rows];
+//
+//         for(int i = 0; i< data.x_train.n_rows;i++){
+//                 old_right_train_index[i] = c_node->right->train_index[i];
+//                 c_node->right->train_index[i] = -1;
+//         }
+//
+//
+//         // Storing test observations
+//         int old_left_test_index[data.x_test.n_rows];
+//         int old_right_test_index[data.x_test.n_rows];
+//
+//         for(int i = 0; i< data.x_test.n_rows;i++){
+//                 old_left_test_index[i] = c_node->left->test_index[i];
+//                 c_node->left->test_index[i] = -1;
+//         }
+//
+//         for(int i = 0; i< data.x_test.n_rows;i++){
+//                 old_right_test_index[i] = c_node->right->test_index[i];
+//                 c_node->right->test_index[i] = -1;
+//         }
+//
+//         // Storing the old ones
+//         int old_var_split = c_node->var_split;
+//         int old_var_split_rule = c_node->var_split_rule;
+//         int old_lower = c_node->lower;
+//         int old_upper = c_node->upper;
+//
+//         // Selecting the var
+//         c_node-> sampleSplitVar(data);
+//         // Updating the limits
+//         c_node->getLimits();
+//         // Selecting a rule
+//         c_node -> var_split_rule = (c_node->upper-c_node->lower)*rand_unif()+c_node->lower;
+//         // c_node -> var_split_rule = 0.0;
+//
+//         // Create an aux for the left and right index
+//         int train_left_counter = 0;
+//         int train_right_counter = 0;
+//
+//         int test_left_counter = 0;
+//         int test_right_counter = 0;
+//
+//
+//         // Updating the left and the right nodes
+//         for(int i = 0;i<data.x_train.n_rows;i++){
+//                 // cout << " Train indexeses " << c_node -> train_index[i] << endl ;
+//                 if(c_node -> train_index[i] == -1){
+//                         c_node->left->n_leaf = train_left_counter;
+//                         c_node->right->n_leaf = train_right_counter;
+//                         break;
+//                 }
+//                 // cout << " Current train index " << c_node->train_index[i] << endl;
+//
+//                 if(data.x_train(c_node->train_index[i],c_node->var_split)<c_node->var_split_rule){
+//                         c_node->left->train_index[train_left_counter] = c_node->train_index[i];
+//                         train_left_counter++;
+//                 } else {
+//                         c_node->right->train_index[train_right_counter] = c_node->train_index[i];
+//                         train_right_counter++;
+//                 }
+//         }
+//
+//
+//
+//         // Updating the left and the right nodes
+//         for(int i = 0;i<data.x_train.n_rows;i++){
+//                 if(c_node -> test_index[i] == -1){
+//                         c_node->left->n_leaf_test = test_left_counter;
+//                         c_node->right->n_leaf_test = test_right_counter;
+//                         break;
+//                 }
+//                 if(data.x_test(c_node->test_index[i],c_node->var_split)<c_node->var_split_rule){
+//                         c_node->left->test_index[test_left_counter] = c_node->test_index[i];
+//                         test_left_counter++;
+//                 } else {
+//                         c_node->right->test_index[test_right_counter] = c_node->test_index[i];
+//                         test_right_counter++;
+//                 }
+//         }
+//
+//         // If is a root node
+//         if(c_node->isRoot){
+//                 c_node->left->n_leaf = train_left_counter;
+//                 c_node->right->n_leaf = train_right_counter;
+//                 c_node->left->n_leaf_test = train_left_counter;
+//                 c_node->right->n_leaf_test = test_left_counter;
+//         }
+//
+//         cout << "Error C3" << endl;
+//         // cout << c_node->left->n_leaf + c_node->right->n_leaf << endl;
+//         // Updating the new left and right loglikelihoods
+//         c_node->left->splineNodeLogLike(data,curr_res);
+//         c_node->right->splineNodeLogLike(data,curr_res);
+//
+//         cout << "Error C4" << endl;
+//
+//         // Calculating the acceptance
+//         double new_tree_log_like =  - old_left_log_like - old_right_log_like + c_node->left->log_likelihood + c_node->right->log_likelihood;
+//
+//         double acceptance = exp(new_tree_log_like);
+//
+//         if(rand_unif()<acceptance){
+//                 // Keep all the treesi
+//         } else {
+//
+//                 // Returning to the previous values
+//                 c_node->var_split = old_var_split;
+//                 c_node->var_split_rule = old_var_split_rule;
+//                 c_node->lower = old_lower;
+//                 c_node->upper = old_upper;
+//
+//                 // Returning to the old ones
+//                 c_node->left->r_sum = old_left_r_sum;
+//                 c_node->left->r_sq_sum = old_left_r_sq_sum;
+//                 c_node->left->n_leaf = old_left_n_leaf;
+//                 c_node->left->log_likelihood = old_left_log_like;
+//                 c_node->left->train_index = old_left_train_index;
+//                 c_node->left->test_index = old_left_test_index;
+//
+//                 c_node->right->r_sum = old_right_r_sum;
+//                 c_node->right->r_sq_sum = old_right_r_sq_sum;
+//                 c_node->right->n_leaf = old_right_n_leaf;
+//                 c_node->right->log_likelihood = old_right_log_like;
+//                 c_node->right->train_index = old_right_train_index;
+//                 c_node->right->test_index = old_right_test_index;
+//
+//         }
+//
+//         return;
+// }
+
 
 // Calculating the Loglilelihood of a node
 void Node::nodeLogLike(modelParam& data, arma::vec &curr_res){
@@ -797,7 +1059,7 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
 
         // When we generate empty nodes we don't want to accept them;
         if(train_index[0]==-1){
-        // if(n_leaf < 15){
+        // if(n_leaf < 100){
                 r_sum = 0;
                 r_sq_sum = 10000;
                 n_leaf = 0;
@@ -805,12 +1067,10 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
                 return;
         }
 
-
         // Creating the B spline
         arma::mat leaf_x(n_leaf,data.B_train.n_cols,arma::fill::ones);
         arma::mat leaf_x_test(n_leaf_test,data.B_train.n_cols,arma::fill::ones);
         arma::vec leaf_res(n_leaf);
-        // cout << "Error 1.0 spline loglike " << n_leaf << endl;
 
         for(int i = 0; i < n_leaf;i++){
                 for(int j = 0 ; j < data.B_train.n_cols; j++){
@@ -825,6 +1085,8 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
                 }
         }
 
+        // cout << "Error 2.0 spline loglike " << n_leaf << endl;
+
         // Calculating B
         B = leaf_x;
         B_test = leaf_x_test;
@@ -834,6 +1096,8 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         // Redifining the matrix quantities
         arma::mat btb = B_t*B;
         btr = B_t*leaf_res;
+        cout << "Size of B test: it has rows: " << btb.n_rows << " and columns: "  << btb.n_cols << endl;
+
         rtr = dot(leaf_res,leaf_res);
         arma::mat precision_diag = arma::eye<arma::mat>(B.n_cols,B.n_cols)*(data.tau_b/data.tau);
         precision_diag(0,0) = data.tau_b_intercept/data.tau;
@@ -841,6 +1105,13 @@ void Node::splineNodeLogLike(modelParam& data, arma::vec &curr_res){
         inv_btb_p = inv(btb+precision_diag);
 
         arma::mat aux_loglikelihood3 = (btr.t()*(inv_btb_p*btr));
+
+        // If is smaller then the node size still need to update theq quantities;
+        // if(n_leaf < 15){
+        //         log_likelihood = -2000000; // Absurd value avoid this case
+        //         return;
+        // }
+
         log_likelihood = - 0.5*B.n_cols*log(data.tau) - 0.5*(B.n_cols-1)*log(data.tau_b) -  0.5*log(data.tau_b_intercept)+ 0.5*log(det(inv_btb_p))- 0.5*data.tau*rtr+0.5*data.tau*aux_loglikelihood3(0,0);
 
         return;
@@ -869,17 +1140,21 @@ void updateBeta(Node* tree, modelParam &data){
         for(int i = 0; i < t_nodes.size();i++){
                 if(t_nodes[i]->n_leaf==0 ){
                         /// Skip nodes that doesn't have any observation within terminal node
+                        cout << " SKIPPED" << endl;
                         continue;
                 }
+                cout << "Error mean" << endl;
                 arma::vec mvn_mean = t_nodes[i]->inv_btb_p*t_nodes[i]->btr;
+                cout << "Error sample" << endl;
                 arma::mat sample = arma::randn<arma::mat>(t_nodes[i]->inv_btb_p.n_cols);
+                cout << "Error variance" << endl;
                 t_nodes[i]->betas = arma::chol((1/data.tau)*t_nodes[i]->inv_btb_p,"lower")*sample + mvn_mean;
         }
 }
 
 // Get the prediction
 void getPredictions(Node* tree,
-                    modelParam data,
+                    modelParam &data,
                     arma::vec& current_prediction_train,
                     arma::vec& current_prediction_test){
 
@@ -889,6 +1164,7 @@ void getPredictions(Node* tree,
 
                 // Skipping empty nodes
                 if(t_nodes[i]->n_leaf==0){
+                        cout << " THERE ARE EMPTY NODES" << endl;
                         continue;
                 }
 
@@ -966,6 +1242,7 @@ void updateTauB(Forest all_trees,
                 for(int i = 0; i< t_nodes.size(); i++ ){
 
                         if(t_nodes[i]->betas.size()<1) {
+                                // cout << " Betas size" << t_nodes[i]->betas.size() << endl;
                                 continue;
                         }
 
@@ -1008,6 +1285,7 @@ void updateTauBintercept(Forest all_trees,
                         if(t_nodes[i]->betas.size()<1) {
                                 continue;
                         }
+
                         // Getting only the intercept
                         beta_sq_sum_total = beta_sq_sum_total + t_nodes[i]->betas[0]*t_nodes[i]->betas[0];
                         beta_count_total ++;
@@ -1126,7 +1404,9 @@ Rcpp::List sbart(arma::mat x_train,
 
                         // Iterating over all trees
                         verb = rand_unif();
-
+                        if(all_forest.trees[t]->isLeaf & all_forest.trees[t]->isRoot){
+                                verb = 0.27;
+                        }
 
                         // Selecting the verb
                         if(verb < 0.3){
@@ -1135,13 +1415,17 @@ Rcpp::List sbart(arma::mat x_train,
                                 prune(all_forest.trees[t], data, partial_residuals);
                         } else {
                                 change(all_forest.trees[t], data, partial_residuals);
-
+                                // std::cout << "Error after change" << endl;
                         }
 
                         // Updating the Mu
+                        std::cout << "Error beta" << endl;
+
                         updateBeta(all_forest.trees[t], data);
 
                         // Updating the current prediction
+                        std::cout << "Error predictions" << endl;
+
                         getPredictions(all_forest.trees[t],data,prediction_train,prediction_test);
 
                         // Updating the partial pred
@@ -1157,12 +1441,17 @@ Rcpp::List sbart(arma::mat x_train,
                 }
 
                 // Updating the Tau
+                std::cout << "Error Tau" << endl;
+
                 updateTau(partial_pred, data);
 
+                std::cout << "Error TauB" << endl;
 
                 // Get the tau
-                // updateTauB(all_forest,data,a_tau_b,d_tau_b);
-                // updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
+                updateTauB(all_forest,data,a_tau_b,d_tau_b);
+                std::cout << "Error TauBintercept" << endl;
+
+                updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
 
                 if(i >= n_burn){
                         // Storing the predictions

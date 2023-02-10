@@ -8,7 +8,8 @@ rbart <- function(x_train,
                   n_burn = 500,
                   alpha = 0.95,
                   beta = 2,
-                  df_splines = 10,
+                  # df_splines = 10,
+                  nIknots = 1,
                   df = 3,
                   sigquant = 0.9,
                   kappa = 2,
@@ -59,9 +60,23 @@ rbart <- function(x_train,
      min_y <- min(y)
      max_y <- max(y)
 
+     absolut_min <- min(min(x_train_scale[,1]),min(x_test_scale[,1]))
+     absolut_max <- max(max(x_train_scale[,1]),max(x_test_scale[,1]))
+
+     # Getting the internal knots
+     knots <- quantile(x_train_scale[,1],seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]
+
      # Creating the B spline
-     B_train <- as.matrix(splines::bs(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],df = df_splines,intercept = TRUE))
-     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE]))
+     B_train <- as.matrix(splines::bs(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],knots = knots,
+                                      intercept = TRUE,
+                                      Boundary.knots = c(absolut_min,absolut_max)))
+     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = TRUE]))
+
+     # Adding the intercept
+     # B_train <- cbind(1,B_train)
+     # B_test <- cbind(1,B_test)
+     B_train <- cbind(1,x_train_scale)
+     B_test <- cbind(1,x_test_scale)
 
      # Transforming back to matrix
      # x_train_scale <- as.matrix(B_train)
@@ -123,7 +138,7 @@ rbart <- function(x_train,
           alpha,
           beta,
           a_tau,d_tau,
-          a_tau_b = df_tau_b*0.5,d_tau_b = rate_d_tau$par, # Hypeparameters from tau_b and tau_b_0
+          a_tau_b = 1,d_tau_b = 1, # Hypeparameters from tau_b and tau_b_0
           original_p, # Getting the p available variables
           n_levels # Getting the sample levels
           )

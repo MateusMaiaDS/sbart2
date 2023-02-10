@@ -6,38 +6,48 @@ Rcpp::sourceCpp("src/sbart.cpp")
 source("R/wrap_bart.R")
 source("R/other_functions.R")
 source("R/cv.R")
-
+set.seed(42)
 n_ <- 100
-df_splines_ <- 10
-n_tree_ <- 10
+df_splines_ <- 20
+n_tree_ <- 20
 set.seed(42)
 x <- matrix(seq(-pi,pi,length.out = n_))
 x_new <- matrix(seq(-pi,pi,length.out = n_*100))
 colnames(x) <- "x"
 colnames(x_new) <- "x"
-y <- sin(x) + rnorm(n = n_,sd = 0.1)
+y <- sin(2*x) + rnorm(n = n_,sd = 0.1)
 y[x<0] <- y[x<0] + 2
 y[x>0] <- y[x>0] - 2
 
 # Doing the same for the motor data
-library(boot)
-data("motor")
-x <- motor$times %>% as.matrix
-y <- motor$accel %>% as.matrix()
-colnames(x) <- "x"
-#
+# library(boot)
+# data("motor")
+# x <- motor$times %>% as.matrix
+# y <- motor$accel %>% as.matrix()
+# colnames(x) <- "x"
+
 x <- as.data.frame(x)
 data <- cbind(x,y)
 colnames(data) <- c("x","y")
 
-kfold_obj <- k_fold(data = data,dependent_variable = "y",k_partitions = 10,seed = 42,as_data_frame = TRUE)
+
+# Metrics data.frame (REPETITION)
+metrics_df_REP <- data.frame(rep = NA, rmse = NA, crps = NA, model = NA)
+metrics_df_REP <- metrics_df_REP[-1,]
+
+n_rep <- 10
+all_plots <- list()
+for(k in 1:n_rep){
+kfold_obj <- k_fold(data = data,dependent_variable = "y",k_partitions = 10,seed = 42+k,as_data_frame = TRUE)
 
 # Metrics data.frame
 metrics_df <- data.frame(n_rep = NA, rmse = NA, crps = NA, pi = NA, model = NA)
 metrics_df <- metrics_df[-1,]
 
+
+
 # Storing predictions
-test_predictions <- data.frame(x = NA, y = NA, value = NA, model = NA)
+test_predictions <- data.frame(x = NA, y = NA, value = NA, sd = NA, model = NA)
 test_predictions <- test_predictions[-1,]
 
 for(i in 1:10){
@@ -46,13 +56,16 @@ for(i in 1:10){
      sbartmod <- rbart(x_train = kfold_obj[[i]]$x_train,
                        y = unlist(c(kfold_obj[[i]]$y_train)),
                        x_test = kfold_obj[[i]]$x_test,
-                       n_tree = n_tree_,n_mcmc = 5000,n_burn = 2500,scale_bool = TRUE,
-                       alpha = 0.95,beta = 2,df_splines = df_splines_)
+                       n_tree = n_tree_,n_mcmc = 2000,n_burn = 500,scale_bool = TRUE,
+                       alpha = 0.95,beta = 2,nIknots = 10)
 
      sd_post_vec <- c(sbartmod$tau_post^(-1/2))
 
      rmse_sbart <- rmse(x = unlist(c(kfold_obj[[i]]$y_test)),
                         y = rowMeans(sbartmod$y_hat_test))
+
+     # plot(x = unlist(c(kfold_obj[[i]]$y_test)),
+     #         y = rowMeans(sbartmod$y_hat_test))
 
      crps_sbart <- crps(y = unlist(c(kfold_obj[[i]]$y_test)),
                         means = rowMeans(sbartmod$y_hat_test),
@@ -78,6 +91,8 @@ for(i in 1:10){
      rmse_bart <- rmse(x = unlist(c(kfold_obj[[i]]$y_test)),
                        y = bartmod$yhat.test.mean)
 
+     # plot(x = unlist(c(kfold_obj[[i]]$y_test)),y = bartmod$yhat.test.mean)
+
      crps_bart <- crps(y = unlist(c(kfold_obj[[i]]$y_test)),
                        means = bartmod$yhat.test.mean,
                        sds = rep(mean(bartmod$sigma),length(bartmod$yhat.test.mean)))$CRPS
@@ -96,14 +111,61 @@ for(i in 1:10){
      test_predictions <- rbind(test_predictions, data.frame(x = kfold_obj[[i]]$x_test,
                                                       y = kfold_obj[[i]]$y_test,
                                                       val = rowMeans(sbartmod$y_hat_test),
+                                                      sd = rep(mean(sd_post_vec),length(rowMeans(sbartmod$y_hat_test))),
                                                       model = "SBART"))
 
      test_predictions <- rbind(test_predictions, data.frame(x = kfold_obj[[i]]$x_test,
                                                             y = kfold_obj[[i]]$y_test,
                                                             val = bartmod$yhat.test.mean,
+                                                            sd = rep(mean(bartmod$sigma),length(bartmod$yhat.test.mean)),
                                                             model = "BART"))
 
+
 }
+
+# Plotting the result
+all_plots[[k]] <- ggplot()+
+        geom_point(data = test_predictions %>% filter(model =="BART"), mapping = aes(x = x, y = y), alpha = 0.5)+
+        geom_line(data = test_predictions , mapping = aes(x = x, y = val, col = model))+
+        theme_bw()
+
+metrics_df_REP <- rbind(metrics_df_REP,
+                        data.frame(rep = k,
+                                rmse = rmse(x = test_predictions %>% filter(model == "BART") %>% pull(y),
+                                                y = test_predictions %>% filter(model == "BART") %>% pull(val)),
+                                crps = crps(y = test_predictions %>% filter(model == "BART") %>% pull(y),
+                                            means = test_predictions %>% filter(model == "BART") %>% pull(val),
+                                            sds = test_predictions %>% filter(model == "BART") %>% pull(sd))$CRPS,
+                                model = "BART"),
+                        data.frame(rep = k,
+                                   rmse = rmse(x = test_predictions %>% filter(model == "SBART") %>% pull(y),
+                                               y = test_predictions %>% filter(model == "SBART") %>% pull(val)),
+                                   crps = crps(y = test_predictions %>% filter(model == "SBART") %>% pull(y),
+                                               means = test_predictions %>% filter(model == "SBART") %>% pull(val),
+                                               sds = test_predictions %>% filter(model == "SBART") %>% pull(sd))$CRPS,
+                                   model = "SBART"))
+
+
+                # cat("============\n\n\n")
+                # cat(" AT THE REPETITION ",k, "\n\n\n")
+                # cat("============\n\n\n")
+}
+
+# Plotting boxplot
+plot_all_rep_rmse <- ggplot(metrics_df_REP)+
+        geom_point(mapping = aes(x = rep, y = rmse, col = model))+
+        geom_line(mapping = aes(x = rep, y = rmse, col = model))+
+        ggtitle("rmse")+
+        theme_bw()
+plot_all_rep_rmse
+
+plot_all_rep_crps <- ggplot(metrics_df_REP)+
+        geom_boxplot(mapping = aes(x = model, y = crps, col = model))+
+        ggtitle("crps")+
+        theme_bw()
+
+cowplot::plot_grid(plot_all_rep_rmse,plot_all_rep_crps,nrow = 1)
+
 
 plot_rmse <- metrics_df %>%
      ggplot(mapping = aes(x = model, y = rmse))+
