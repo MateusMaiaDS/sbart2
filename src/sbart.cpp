@@ -601,234 +601,232 @@ void prune(Node* tree, modelParam&data, arma::vec &curr_res){
 
 
 // // Creating the change verb
-// void change(Node* tree, modelParam &data, arma::vec &curr_res){
-//
-//
-//         // Getting the number of terminal nodes
-//         std::vector<Node*> t_nodes = leaves(tree) ;
-//         std::vector<Node*> nog_nodes = nogs(tree);
-//
-//         // Selecting one node to be sampled
-//         Node* c_node = sample_node(nog_nodes);
-//
-//         // Calculate current tree log likelihood
-//         double tree_log_like = 0;
-//
-//         if(c_node->isRoot){
-//                 // cout << " THAT NEVER HAPPENS" << endl;
-//                c_node-> n_leaf = data.x_train.n_rows;
-//                c_node-> n_leaf_test = data.x_test.n_rows;
-//         }
-//
-//         // Calculating the whole likelihood fo the tree
-//         for(int i = 0; i < t_nodes.size(); i++){
-//                 // cout << "Loglike error " << ed
-//                 t_nodes[i]->splineNodeLogLike(data, curr_res);
-//                 tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
-//         }
-//
-//         // If the current node has size zero there is no point of change its rule
-//         if(c_node->n_leaf==0) {
-//                 return;
-//         }
-//
-//         // Storing all the old loglikelihood from left
-//         double old_left_log_like = c_node->left->log_likelihood;
-//         arma::mat old_left_b = c_node->left->B;
-//         arma::mat old_left_b_test = c_node->left->B_test;
-//         double old_left_rtr = c_node->left->rtr;
-//         arma::mat old_left_inv_btb_p = c_node->left->inv_btb_p;
-//         int old_left_train_index[data.x_train.n_rows];
-//         int old_left_n_leaf = c_node->left->n_leaf;
-//
-//         for(int i = 0; i < data.x_train.n_rows;i++){
-//                 old_left_train_index[i] = c_node->left->train_index[i];
-//                 c_node->left->train_index[i] = -1;
-//         }
-//
-//         // Storing all of the old loglikelihood from right;
-//         double old_right_log_like = c_node->right->log_likelihood;
-//         arma::mat old_right_b = c_node->right->B;
-//         arma::mat old_right_b_test = c_node->right->B_test;
-//         double old_right_rtr = c_node->right->rtr;
-//         arma::mat old_right_inv_btb_p = c_node->right->inv_btb_p;
-//         int old_right_train_index[data.x_train.n_rows];
-//         int old_right_n_leaf = c_node->right->n_leaf;
-//
-//         for(int i = 0; i < data.x_train.n_rows;i++){
-//                 old_right_train_index[i] = c_node->right->train_index[i];
-//                 c_node->right->train_index[i] = -1;
-//         }
-//
-//
-//         // Storing test observations
-//         int old_left_test_index[data.x_test.n_rows];
-//         int old_right_test_index[data.x_test.n_rows];
-//         int old_left_n_leaf_test = c_node->left->n_leaf_test;
-//         int old_right_n_leaf_test = c_node->right->n_leaf_test;
-//
-//         for(int i = 0; i< data.x_test.n_rows;i++){
-//                 old_left_test_index[i] = c_node->left->test_index[i];
-//                 c_node->left->test_index[i] = -1;
-//         }
-//
-//         for(int i = 0; i< data.x_test.n_rows;i++){
-//                 old_right_test_index[i] = c_node->right->test_index[i];
-//                 c_node->right->test_index[i] = -1;
-//         }
-//
-//         // Storing the old ones
-//         int old_var_split = c_node->var_split;
-//         int old_var_split_rule = c_node->var_split_rule;
-//         int old_lower = c_node->lower;
-//         int old_upper = c_node->upper;
-//
-//         // Selecting the var
-//         c_node-> sampleSplitVar(data);
-//         // Updating the limits
-//         c_node->getLimits();
-//         // Selecting a rule
-//         c_node -> var_split_rule = (c_node->upper-c_node->lower)*rand_unif()+c_node->lower;
-//         // c_node -> var_split_rule = 0.0;
-//
-//         // Create an aux for the left and right index
-//         int train_left_counter = 0;
-//         int train_right_counter = 0;
-//
-//         int test_left_counter = 0;
-//         int test_right_counter = 0;
-//
-//
-//         // Updating the left and the right nodes
-//         for(int i = 0;i<data.x_train.n_rows;i++){
-//                 // cout << " Train indexeses " << c_node -> train_index[i] << endl ;
-//                 if(c_node -> train_index[i] == -1){
-//                         c_node->left->n_leaf = train_left_counter;
-//                         c_node->right->n_leaf = train_right_counter;
-//                         break;
-//                 }
-//                 // cout << " Current train index " << c_node->train_index[i] << endl;
-//
-//                 if(data.x_train(c_node->train_index[i],c_node->var_split)<c_node->var_split_rule){
-//                         c_node->left->train_index[train_left_counter] = c_node->train_index[i];
-//                         train_left_counter++;
-//                 } else {
-//                         c_node->right->train_index[train_right_counter] = c_node->train_index[i];
-//                         train_right_counter++;
-//                 }
-//         }
-//
-//
-//
-//         // Updating the left and the right nodes
-//         for(int i = 0;i<data.x_test.n_rows;i++){
-//
-//                 if(c_node -> test_index[i] == -1){
-//                         c_node->left->n_leaf_test = test_left_counter;
-//                         c_node->right->n_leaf_test = test_right_counter;
-//                         break;
-//                 }
-//
-//                 if(data.x_test(c_node->test_index[i],c_node->var_split)<c_node->var_split_rule){
-//                         c_node->left->test_index[test_left_counter] = c_node->test_index[i];
-//                         test_left_counter++;
-//                 } else {
-//                         c_node->right->test_index[test_right_counter] = c_node->test_index[i];
-//                         test_right_counter++;
-//                 }
-//         }
-//
-//         // If is a root node
-//         if(c_node->isRoot){
-//                 c_node->left->n_leaf = train_left_counter;
-//                 c_node->right->n_leaf = train_right_counter;
-//                 c_node->left->n_leaf_test = test_left_counter;
-//                 c_node->right->n_leaf_test = test_right_counter;
-//         }
-//
-//
-//         if((c_node->left->n_leaf<5) || (c_node->right->n_leaf)<5){
-//
-//                 // Returning to the previous values
-//                 c_node->var_split = old_var_split;
-//                 c_node->var_split_rule = old_var_split_rule;
-//                 c_node->lower = old_lower;
-//                 c_node->upper = old_upper;
-//
-//                 // Returning to the old ones
-//                 c_node->left->B = old_left_b;
-//                 c_node->left->B_test = old_left_b_test;
-//                 c_node->left->rtr = old_left_rtr;
-//                 c_node->left->inv_btb_p = old_left_inv_btb_p;
-//
-//                 c_node->left->n_leaf = old_left_n_leaf;
-//                 c_node->left->n_leaf_test = old_left_n_leaf_test;
-//                 c_node->left->log_likelihood = old_left_log_like;
-//                 c_node->left->train_index = old_left_train_index;
-//                 c_node->left->test_index = old_left_test_index;
-//
-//                 // Returning to the old ones
-//                 c_node->right->B = old_right_b;
-//                 c_node->right->B_test = old_right_b_test;
-//                 c_node->right->rtr = old_right_rtr;
-//                 c_node->right->inv_btb_p = old_right_inv_btb_p;
-//
-//                 c_node->right->n_leaf = old_right_n_leaf;
-//                 c_node->right->n_leaf_test = old_right_n_leaf_test;
-//                 c_node->right->log_likelihood = old_right_log_like;
-//                 c_node->right->train_index = old_right_train_index;
-//                 c_node->right->test_index = old_right_test_index;
-//
-//                 return;
-//         }
-//
-//         // Updating the new left and right loglikelihoods
-//         c_node->left->splineNodeLogLike(data,curr_res);
-//         c_node->right->splineNodeLogLike(data,curr_res);
-//
-//         // Calculating the acceptance
-//         double new_tree_log_like =  - old_left_log_like - old_right_log_like + c_node->left->log_likelihood + c_node->right->log_likelihood;
-//
-//         double acceptance = exp(new_tree_log_like);
-//
-//         if(rand_unif()<acceptance){
-//                 // Keep all the treesi
-//         } else {
-//
-//                 // Returning to the previous values
-//                 c_node->var_split = old_var_split;
-//                 c_node->var_split_rule = old_var_split_rule;
-//                 c_node->lower = old_lower;
-//                 c_node->upper = old_upper;
-//
-//                 // Returning to the old ones
-//                 c_node->left->B = old_left_b;
-//                 c_node->left->B_test = old_left_b_test;
-//                 c_node->left->rtr = old_left_rtr;
-//                 c_node->left->inv_btb_p = old_left_inv_btb_p;
-//
-//                 c_node->left->n_leaf = old_left_n_leaf;
-//                 c_node->left->n_leaf_test = old_left_n_leaf_test;
-//                 c_node->left->log_likelihood = old_left_log_like;
-//                 c_node->left->train_index = old_left_train_index;
-//                 c_node->left->test_index = old_left_test_index;
-//
-//                 // Returning to the old ones
-//                 c_node->right->B = old_right_b;
-//                 c_node->right->B_test = old_right_b_test;
-//                 c_node->right->rtr = old_right_rtr;
-//                 c_node->right->inv_btb_p = old_right_inv_btb_p;
-//
-//                 c_node->right->n_leaf = old_right_n_leaf;
-//                 c_node->right->n_leaf_test = old_right_n_leaf_test;
-//                 c_node->right->log_likelihood = old_right_log_like;
-//                 c_node->right->train_index = old_right_train_index;
-//                 c_node->right->test_index = old_right_test_index;
-//
-//         }
-//
-//         return;
-// }
+void change(Node* tree, modelParam &data, arma::vec &curr_res){
+
+
+        // Getting the number of terminal nodes
+        std::vector<Node*> t_nodes = leaves(tree) ;
+        std::vector<Node*> nog_nodes = nogs(tree);
+
+        // Selecting one node to be sampled
+        Node* c_node = sample_node(nog_nodes);
+
+        // Calculate current tree log likelihood
+        double tree_log_like = 0;
+
+        if(c_node->isRoot){
+                // cout << " THAT NEVER HAPPENS" << endl;
+               c_node-> n_leaf = data.x_train.n_rows;
+               c_node-> n_leaf_test = data.x_test.n_rows;
+        }
+
+        // Calculating the whole likelihood fo the tree
+        for(int i = 0; i < t_nodes.size(); i++){
+                // cout << "Loglike error " << ed
+                t_nodes[i]->splineNodeLogLike(data, curr_res);
+                tree_log_like = tree_log_like + t_nodes[i]->log_likelihood;
+        }
+
+        // If the current node has size zero there is no point of change its rule
+        if(c_node->n_leaf==0) {
+                return;
+        }
+
+        // Storing all the old loglikelihood from left
+        double old_left_log_like = c_node->left->log_likelihood;
+        arma::mat old_left_b = c_node->left->B;
+        arma::mat old_left_b_test = c_node->left->B_test;
+        double old_left_rtr = c_node->left->rtr;
+        arma::mat old_left_inv_btb_p = c_node->left->inv_btb_p;
+        arma::vec old_left_btr = c_node->left->btr;
+
+
+        arma::vec old_left_train_index = c_node->left->train_index;
+        c_node->left->train_index.fill(-1); // Returning to the original
+        int old_left_n_leaf = c_node->left->n_leaf;
+
+
+        // Storing all of the old loglikelihood from right;
+        double old_right_log_like = c_node->right->log_likelihood;
+        arma::mat old_right_b = c_node->right->B;
+        arma::mat old_right_b_test = c_node->right->B_test;
+        double old_right_rtr = c_node->right->rtr;
+        arma::mat old_right_inv_btb_p = c_node->right->inv_btb_p;
+        arma::vec old_right_btr = c_node->right->btr;
+
+
+        arma::vec old_right_train_index = c_node->right->train_index;
+        c_node->right->train_index.fill(-1);
+        int old_right_n_leaf = c_node->right->n_leaf;
+
+
+
+        // Storing test observations
+        arma::vec old_left_test_index = c_node->left->test_index;
+        arma::vec old_right_test_index = c_node->right->test_index;
+        c_node->left->test_index.fill(-1);
+        c_node->right->test_index.fill(-1);
+
+        int old_left_n_leaf_test = c_node->left->n_leaf_test;
+        int old_right_n_leaf_test = c_node->right->n_leaf_test;
+
+
+        // Storing the old ones
+        int old_var_split = c_node->var_split;
+        int old_var_split_rule = c_node->var_split_rule;
+        int old_lower = c_node->lower;
+        int old_upper = c_node->upper;
+
+        // Selecting the var
+        c_node-> sampleSplitVar(data);
+        // Updating the limits
+        c_node->getLimits();
+        // Selecting a rule
+        c_node -> var_split_rule = (c_node->upper-c_node->lower)*rand_unif()+c_node->lower;
+        // c_node -> var_split_rule = 0.0;
+
+        // Create an aux for the left and right index
+        int train_left_counter = 0;
+        int train_right_counter = 0;
+
+        int test_left_counter = 0;
+        int test_right_counter = 0;
+
+
+        // Updating the left and the right nodes
+        for(int i = 0;i<data.x_train.n_rows;i++){
+                // cout << " Train indexeses " << c_node -> train_index[i] << endl ;
+                if(c_node -> train_index[i] == -1){
+                        c_node->left->n_leaf = train_left_counter;
+                        c_node->right->n_leaf = train_right_counter;
+                        break;
+                }
+                // cout << " Current train index " << c_node->train_index[i] << endl;
+
+                if(data.x_train(c_node->train_index[i],c_node->var_split)<c_node->var_split_rule){
+                        c_node->left->train_index[train_left_counter] = c_node->train_index[i];
+                        train_left_counter++;
+                } else {
+                        c_node->right->train_index[train_right_counter] = c_node->train_index[i];
+                        train_right_counter++;
+                }
+        }
+
+
+
+        // Updating the left and the right nodes
+        for(int i = 0;i<data.x_test.n_rows;i++){
+
+                if(c_node -> test_index[i] == -1){
+                        c_node->left->n_leaf_test = test_left_counter;
+                        c_node->right->n_leaf_test = test_right_counter;
+                        break;
+                }
+
+                if(data.x_test(c_node->test_index[i],c_node->var_split)<c_node->var_split_rule){
+                        c_node->left->test_index[test_left_counter] = c_node->test_index[i];
+                        test_left_counter++;
+                } else {
+                        c_node->right->test_index[test_right_counter] = c_node->test_index[i];
+                        test_right_counter++;
+                }
+        }
+
+        // If is a root node
+        if(c_node->isRoot){
+                c_node->left->n_leaf = train_left_counter;
+                c_node->right->n_leaf = train_right_counter;
+                c_node->left->n_leaf_test = test_left_counter;
+                c_node->right->n_leaf_test = test_right_counter;
+        }
+
+
+        if((c_node->left->n_leaf<5) || (c_node->right->n_leaf)<5){
+
+                // Returning to the previous values
+                c_node->var_split = old_var_split;
+                c_node->var_split_rule = old_var_split_rule;
+                c_node->lower = old_lower;
+                c_node->upper = old_upper;
+
+                // Returning to the old ones
+                c_node->left->B = old_left_b;
+                c_node->left->B_test = old_left_b_test;
+                c_node->left->rtr = old_left_rtr;
+                c_node->left->inv_btb_p = old_left_inv_btb_p;
+                c_node->left->btr = old_left_btr;
+
+                c_node->left->n_leaf = old_left_n_leaf;
+                c_node->left->n_leaf_test = old_left_n_leaf_test;
+                c_node->left->log_likelihood = old_left_log_like;
+                c_node->left->train_index = old_left_train_index;
+                c_node->left->test_index = old_left_test_index;
+
+                // Returning to the old ones
+                c_node->right->B = old_right_b;
+                c_node->right->B_test = old_right_b_test;
+                c_node->right->rtr = old_right_rtr;
+                c_node->right->inv_btb_p = old_right_inv_btb_p;
+                c_node->right->btr = old_right_btr;
+
+                c_node->right->n_leaf = old_right_n_leaf;
+                c_node->right->n_leaf_test = old_right_n_leaf_test;
+                c_node->right->log_likelihood = old_right_log_like;
+                c_node->right->train_index = old_right_train_index;
+                c_node->right->test_index = old_right_test_index;
+
+                return;
+        }
+
+        // Updating the new left and right loglikelihoods
+        c_node->left->splineNodeLogLike(data,curr_res);
+        c_node->right->splineNodeLogLike(data,curr_res);
+
+        // Calculating the acceptance
+        double new_tree_log_like =  - old_left_log_like - old_right_log_like + c_node->left->log_likelihood + c_node->right->log_likelihood;
+
+        double acceptance = exp(new_tree_log_like);
+
+        if(rand_unif()<acceptance){
+                // Keep all the treesi
+        } else {
+
+                // Returning to the previous values
+                c_node->var_split = old_var_split;
+                c_node->var_split_rule = old_var_split_rule;
+                c_node->lower = old_lower;
+                c_node->upper = old_upper;
+
+                // Returning to the old ones
+                c_node->left->B = old_left_b;
+                c_node->left->B_test = old_left_b_test;
+                c_node->left->rtr = old_left_rtr;
+                c_node->left->inv_btb_p = old_left_inv_btb_p;
+                c_node->left->btr = old_left_btr;
+
+                c_node->left->n_leaf = old_left_n_leaf;
+                c_node->left->n_leaf_test = old_left_n_leaf_test;
+                c_node->left->log_likelihood = old_left_log_like;
+                c_node->left->train_index = old_left_train_index;
+                c_node->left->test_index = old_left_test_index;
+
+                // Returning to the old ones
+                c_node->right->B = old_right_b;
+                c_node->right->B_test = old_right_b_test;
+                c_node->right->rtr = old_right_rtr;
+                c_node->right->inv_btb_p = old_right_inv_btb_p;
+                c_node->right->btr = old_right_btr;
+
+                c_node->right->n_leaf = old_right_n_leaf;
+                c_node->right->n_leaf_test = old_right_n_leaf_test;
+                c_node->right->log_likelihood = old_right_log_like;
+                c_node->right->train_index = old_right_train_index;
+                c_node->right->test_index = old_right_test_index;
+
+        }
+
+        return;
+}
 
 // // Creating the change verb
 // void OLD_change(Node* tree, modelParam &data, arma::vec &curr_res){
@@ -1422,7 +1420,7 @@ Rcpp::List sbart(arma::mat x_train,
                         } else if(verb>=0.3 & verb <0.6) {
                                 prune(all_forest.trees[t], data, partial_residuals);
                         } else {
-                                // change(all_forest.trees[t], data, partial_residuals);
+                                change(all_forest.trees[t], data, partial_residuals);
                                 // std::cout << "Error after change" << endl;
                         }
 

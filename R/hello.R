@@ -6,7 +6,7 @@ source("R/other_functions.R")
 source("R/wrap_bart.R")
 n_ <- 100
 x <- matrix(seq(-pi,pi,length.out = n_))
-x_new <- matrix(seq(-pi,pi,length.out = n_*100))
+x_new <- matrix(seq(-pi,pi,length.out = n_*1))
 colnames(x) <- "x"
 colnames(x_new) <- "x"
 # x <- as.data.frame(x)
@@ -61,9 +61,9 @@ plot(bart_test$tau_b_post_intercept[-2500],type = "l", main = expression(tau[b[0
 
 bartmod <- dbarts::bart(x.train = x,y.train = unlist(c(y)),ntree = 20,x.test = x_test)
 
-
-# motrbartmod <- MOTRbart::motr_bart(x = cbind(1,x),y = c(y))
-# pred_motrbart = predict_motr_bart(motrbartmod,cbind(1,x_test),type = "all")
+library(MOTRbart)
+motrbartmod <- MOTRbart::motr_bart(x = cbind(1,x),y = c(y))
+pred_motrbart = predict_motr_bart(motrbartmod,cbind(1,x_test),type = "all")
 
 # par(mfrow=c(2,1))
 # plot(y$x,bart_test$y_hat %>% rowMeans())
@@ -93,8 +93,8 @@ ggplot()+
      geom_point(data = data.frame(x = x, y = y ), mapping = aes(x = x, y =y ))+
      geom_point(data = data.frame(x = x, y = apply(bart_test[[1]],1,mean)), mapping = aes(x = x,  y = y), col = "darkblue", alpha = 0.7, pch= 3)+
      geom_line(data = data.frame(x = x_new, y = apply(bart_test[[2]],1,mean)), mapping = aes(x = x, y = y) , col = "blue") +
-     geom_line(data = data.frame(x = x_new, y = bartmod$yhat.test.mean), mapping = aes(x = x, y = y), col ="red")+
-     # geom_line(data = data.frame(x = x_new, y = pred_motrbart %>% colMeans()), mapping = aes(x = x, y = y), col ="darkgreen")+
+     # geom_line(data = data.frame(x = x_new, y = bartmod$yhat.test.mean), mapping = aes(x = x, y = y), col ="red")+
+     geom_line(data = data.frame(x = x_new, y = pred_motrbart %>% colMeans()), mapping = aes(x = x, y = y), col ="darkgreen")+
 
      geom_line(data = all_tree_posterior_mean,
                mapping = aes(x = x, y = value, col = name), alpha = 0.5,show.legend = FALSE)+
