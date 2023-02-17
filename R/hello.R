@@ -47,7 +47,7 @@ x_test <- as.data.frame(x_new)
 
 
 # Testing the GP-BART
-bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x,
+bart_test <- rbart(x_train = x,y = unlist(c(y)),x_test = x_test,
                    n_tree = 10,n_mcmc = 2000,
                    alpha = 0.95,beta = 2,nIknots = 10,
                    df_tau_b = 10,prob_tau_b = 0.9,
