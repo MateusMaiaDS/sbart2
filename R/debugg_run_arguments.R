@@ -14,3 +14,4 @@
 # # Hyperparam for tau_b and tau_b_0
 # df_tau_b = 5
 # prob_tau_b = 0.9
+# nIknots <- 10

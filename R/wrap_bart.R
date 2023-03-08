@@ -67,16 +67,16 @@ rbart <- function(x_train,
      knots <- quantile(x_train_scale[,1],seq(0,1,length.out = nIknots+2))[-c(1,nIknots+2)]
 
      # Creating the B spline
-     B_train <- as.matrix(splines::bs(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],knots = knots,
-                                      intercept = TRUE,
+     B_train <- as.matrix(splines::ns(x = x_train_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE],knots = knots,
+                                      intercept = FALSE,
                                       Boundary.knots = c(absolut_min,absolut_max)))
-     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = TRUE]))
+     B_test <- as.matrix(predict(B_train,newx = x_test_scale[,col_names[!(col_names %in% dummy_x$facVars)], drop = FALSE]))
 
      # Adding the intercept
-     # B_train <- cbind(1,B_train)
-     # B_test <- cbind(1,B_test)
-     B_train <- cbind(1,x_train_scale)
-     B_test <- cbind(1,x_test_scale)
+     B_train <- cbind(1,B_train)
+     B_test <- cbind(1,B_test)
+     # B_train <- cbind(1,x_train_scale)
+     # B_test <- cbind(1,x_test_scale)
 
      # Transforming back to matrix
      # x_train_scale <- as.matrix(B_train)
@@ -90,9 +90,8 @@ rbart <- function(x_train,
      }
 
 
-
      # Calculating \tau_{mu}
-     tau_b_0 <- tau_b <- tau_mu <- 0.1*(4*n_tree*(kappa^2))
+     tau_b_0 <- tau_b <- tau_mu <- (4*n_tree*(kappa^2))
      # tau_b <- n_tree
 
      # Getting the naive sigma value
@@ -107,8 +106,8 @@ rbart <- function(x_train,
      d_tau <- (lambda*df)/2
 
      # Defining a_tau_b and d_tau_b
-     a_tau_b <- n_tree
-     d_tau_b <- 1
+     a_tau_b <- df_tau_b/2
+     # d_tau_b <- 1
 
      # Call the bart function
      tau_init <- nsigma^(-2)
@@ -117,9 +116,26 @@ rbart <- function(x_train,
      # Creating the vector that stores all trees
      all_tree_post <- vector("list",length = round(n_mcmc-n_burn))
 
-     rate_d_tau <- optim(par = 1,d_tau_b_rate,method = "L-BFGS-B",lower = 0,
-                         df = df_tau_b, prob = prob_tau_b,kappa = kappa,
-                         n_tree = n_tree)
+     # Old version
+     # rate_d_tau <- optim(par = 1,d_tau_rate,method = "L-BFGS-B",lower = 0,
+     #                     df = df_tau_b, prob = prob_tau_b,kappa = kappa,
+     #                     n_tree = n_tree)
+
+
+     # Getting the \tau_b
+     naive_tau_b <- optim(par = rep(1, 2), fn = nll, dat=y_scale,
+                          x = x_train_scale,
+                          B = B_train,
+                          tau_b_0_ = tau_b_0,
+                          method = "L-BFGS-B",
+                          hessian = TRUE,
+                          lower = rep(0.0001, 2))$par[2]
+
+     d_tau_b <- optim(par = 1,d_tau_b_rate,method = "L-BFGS-B",
+                           lower = 0.001,df_tau_b = df_tau_b,
+                           prob_tau_b = prob_tau_b,
+                           naive_tau_b = naive_tau_b)$par
+
 
      # Generating the BART obj
      bart_obj <- sbart(x_train_scale,
@@ -138,7 +154,7 @@ rbart <- function(x_train,
           alpha,
           beta,
           a_tau,d_tau,
-          a_tau_b = 1,d_tau_b = 1, # Hypeparameters from tau_b and tau_b_0
+          a_tau_b = a_tau_b,d_tau_b = d_tau_b, # Hypeparameters from tau_b and tau_b_0
           original_p, # Getting the p available variables
           n_levels # Getting the sample levels
           )
@@ -179,7 +195,9 @@ rbart <- function(x_train,
                               beta = beta,
                               tau_mu = tau_mu,
                               a_tau = a_tau,
-                              d_tau = d_tau),
+                              d_tau = d_tau,
+                              a_tau_b = a_tau_b,
+                              d_tau_b = d_tau_b),
                  mcmc = list(n_mcmc = n_mcmc,
                              n_burn = n_burn),
                  data = list(x_train = x_train,

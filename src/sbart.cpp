@@ -1456,8 +1456,7 @@ Rcpp::List sbart(arma::mat x_train,
                 // Get the tau
                 updateTauB(all_forest,data,a_tau_b,d_tau_b);
                 // std::cout << "Error TauBintercept" << endl;
-
-                updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
+                // updateTauBintercept(all_forest,data,a_tau_b,d_tau_b);
 
                 if(i >= n_burn){
                         // Storing the predictions
